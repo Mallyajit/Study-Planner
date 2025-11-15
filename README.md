@@ -17,7 +17,7 @@ Copy `.env.example` to `.env` and add your API keys:
 GEMINI_API_KEY=your_gemini_api_key_here
 TWILIO_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+TWILIO_WHATSAPP_NUMBER=whatsapp:+14155******
 ```
 
 ### 3. Start Backend Server
@@ -61,7 +61,7 @@ Open browser: `http://localhost:5000`
    - Click Save
 
 5. **Join Sandbox:**
-   - Send WhatsApp message to `+1 415 523 8886`
+   - Send WhatsApp message to `+1 415 523 ****`
    - Message: `join YOUR-SANDBOX-CODE` (shown in Twilio console)
 
 6. **Send Tasks via WhatsApp:**
@@ -74,7 +74,7 @@ Open browser: `http://localhost:5000`
 ```powershell
 curl.exe -X POST "http://localhost:5000/webhook/whatsapp" `
     -H "Content-Type: application/x-www-form-urlencoded" `
-    -d "From=whatsapp:+917384406508&Body=I have a Python assignment due tomorrow at 3 PM, high priority"
+    -d "From=whatsapp:+91**********&Body=I have a Python assignment due tomorrow at 3 PM, high priority"
 ```
 
 ---
@@ -249,7 +249,7 @@ GEMINI_API_KEY=your_gemini_api_key
 # Optional (for WhatsApp)
 TWILIO_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+TWILIO_WHATSAPP_NUMBER=whatsapp:+141552****
 
 # App will work without Twilio (mock mode)
 ```
@@ -259,7 +259,7 @@ TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
 ## 📱 User Information
 
 - **Default User ID:** 1
-- **Phone Number:** +917384406508
+- **Phone Number:** +91**********
 - **Name:** Mallyajit
 
 ---
