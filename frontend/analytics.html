@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress Analytics - StudyPlanner AI</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <h1><i class="fas fa-chart-line"></i> Progress Analytics</h1>
+                    <a href="index.html" class="btn-back">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Analytics Content -->
+        <main class="main-content">
+            <!-- Summary Stats -->
+            <section class="stats-grid">
+                <div class="stat-card score">
+                    <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+                    <div class="stat-content">
+                        <h3>Total Points Earned</h3>
+                        <p class="stat-value" id="totalPointsEarned">0</p>
+                    </div>
+                </div>
+                <div class="stat-card streak">
+                    <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+                    <div class="stat-content">
+                        <h3>Study Days This Month</h3>
+                        <p class="stat-value" id="studyDaysMonth">0</p>
+                    </div>
+                </div>
+                <div class="stat-card tasks">
+                    <div class="stat-icon"><i class="fas fa-check-double"></i></div>
+                    <div class="stat-content">
+                        <h3>Completion Rate</h3>
+                        <p class="stat-value" id="completionRate">0%</p>
+                    </div>
+                </div>
+                <div class="stat-card rank">
+                    <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                    <div class="stat-content">
+                        <h3>Total Study Hours</h3>
+                        <p class="stat-value" id="totalStudyHours">0h</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <div class="two-column">
+                <!-- Left Column -->
+                <div class="left-column">
+                    <!-- Tasks Completion Chart -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-chart-pie"></i> Task Completion Overview</h2>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="taskCompletionChart" height="300"></canvas>
+                        </div>
+                    </section>
+
+                    <!-- Weekly Progress Chart -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-chart-bar"></i> Weekly Progress</h2>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="weeklyProgressChart" height="250"></canvas>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Right Column -->
+                <div class="right-column">
+                    <!-- Daily Study Time Chart -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-chart-line"></i> Daily Study Time (Hours)</h2>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="dailyStudyChart" height="250"></canvas>
+                        </div>
+                    </section>
+
+                    <!-- Priority Distribution -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-tasks"></i> Task Priority Distribution</h2>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="priorityChart" height="250"></canvas>
+                        </div>
+                    </section>
+
+                    <!-- Recent Activity -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-history"></i> Recent Activity</h2>
+                        </div>
+                        <div class="card-body">
+                            <div id="recentActivity" class="activity-list">
+                                <p class="loading">Loading activity...</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="analytics.js"></script>
+</body>
+
+</html>

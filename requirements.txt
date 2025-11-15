@@ -1,0 +1,17 @@
+# Core Web Framework
+flask==3.0.0
+flask-cors==4.0.0
+
+# AI/ML Libraries
+google-generativeai==0.3.2
+
+# Database
+mysql-connector-python==8.2.0
+
+# Communication & Reminders
+twilio==8.11.1
+schedule==1.2.0
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0

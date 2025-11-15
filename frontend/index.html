@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyPlanner AI - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-graduation-cap"></i> StudyPlanner AI</h1>
+                <div class="header-actions">
+                    <a href="analytics.html" class="analytics-btn">
+                        <i class="fas fa-chart-line"></i> Analytics
+                    </a>
+                    <div class="user-info" id="userInfo">
+                        <span id="userName">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Stats Overview -->
+            <section class="stats-grid">
+                <div class="stat-card score">
+                    <div class="stat-icon"><i class="fas fa-star"></i></div>
+                    <div class="stat-content">
+                        <h3>Total Score</h3>
+                        <p class="stat-value" id="totalScore">0</p>
+                    </div>
+                </div>
+                <div class="stat-card streak">
+                    <div class="stat-icon"><i class="fas fa-fire"></i></div>
+                    <div class="stat-content">
+                        <h3>Current Streak</h3>
+                        <p class="stat-value" id="currentStreak">0 days</p>
+                    </div>
+                </div>
+                <div class="stat-card tasks">
+                    <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                    <div class="stat-content">
+                        <h3>Tasks Completed</h3>
+                        <p class="stat-value" id="tasksCompleted">0</p>
+                    </div>
+                </div>
+                <div class="stat-card rank">
+                    <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+                    <div class="stat-content">
+                        <h3>Global Rank</h3>
+                        <p class="stat-value" id="globalRank">#-</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Two Column Layout -->
+            <div class="two-column">
+                <!-- Left Column: Tasks & Schedule -->
+                <div class="left-column">
+                    <!-- Tasks Section -->
+                    <section class="card tasks-section">
+                        <div class="card-header">
+                            <h2><i class="fas fa-tasks"></i> My Tasks</h2>
+                            <button class="btn-refresh" onclick="loadTasks()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="tasksList" class="tasks-list">
+                                <p class="loading">Loading tasks...</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Schedule Section -->
+                    <section class="card schedule-section">
+                        <div class="card-header">
+                            <h2><i class="fas fa-calendar-alt"></i> AI Schedule</h2>
+                            <button class="btn-refresh" onclick="loadSchedule()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="scheduleContent" class="schedule-content">
+                                <p class="loading">Loading schedule...</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Right Column: Leaderboard & Friends -->
+                <div class="right-column">
+                    <!-- Leaderboard Section -->
+                    <section class="card leaderboard-section">
+                        <div class="card-header">
+                            <h2><i class="fas fa-medal"></i> Leaderboard</h2>
+                            <button class="btn-refresh" onclick="loadLeaderboard()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="leaderboardList" class="leaderboard-list">
+                                <p class="loading">Loading leaderboard...</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Friend Comparison Section -->
+                    <section class="card friends-section">
+                        <div class="card-header">
+                            <h2><i class="fas fa-user-friends"></i> Friend Comparison</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="friend-selector">
+                                <select id="friendSelect" onchange="compareFriend()">
+                                    <option value="">Select a friend...</option>
+                                </select>
+                            </div>
+                            <div id="friendComparison" class="friend-comparison">
+                                <p class="info-text">Select a friend to compare stats</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- WhatsApp Info -->
+                    <section class="card whatsapp-info">
+                        <div class="card-header">
+                            <h2><i class="fab fa-whatsapp"></i> WhatsApp Commands</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="whatsapp-commands">
+                                <p class="info-text">Send these commands to the bot:</p>
+                                <ul>
+                                    <li><code>add task: [title] by [date]</code></li>
+                                    <li><code>schedule</code> - Get AI schedule</li>
+                                    <li><code>progress</code> - View your stats</li>
+                                    <li><code>leaderboard</code> - See rankings</li>
+                                    <li><code>help</code> - View all commands</li>
+                                </ul>
+                                <p class="info-text" style="margin-top: 15px;">
+                                    <strong>Your Number:</strong> +917384406508
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>StudyPlanner AI - Powered by Gemini AI | Last updated: <span id="lastUpdate">-</span></p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
