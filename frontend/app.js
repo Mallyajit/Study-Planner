@@ -6,6 +6,33 @@ const USER_PHONE = '+917384406508';
 // State
 let currentUser = null;
 let friends = [];
+let flashcardModules = [];
+let activeQuiz = null;
+
+// Helpers
+function normalizeLeaderboardEntries(payload) {
+    if (!payload) {
+        return [];
+    }
+
+    if (Array.isArray(payload)) {
+        return payload;
+    }
+
+    if (payload.leaderboard && Array.isArray(payload.leaderboard)) {
+        return payload.leaderboard;
+    }
+
+    if (payload.weekly_leaderboard && Array.isArray(payload.weekly_leaderboard)) {
+        return payload.weekly_leaderboard;
+    }
+
+    if (payload.entries && Array.isArray(payload.entries)) {
+        return payload.entries;
+    }
+
+    return [];
+}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async() => {
@@ -67,6 +94,7 @@ async function loadAllData() {
     await Promise.all([
         loadProgress(),
         loadTasks(),
+        loadFlashcards(),
         loadSchedule(),
         loadLeaderboard(),
         loadFriends()
@@ -116,6 +144,8 @@ async function loadTasks() {
         // Separate tasks by status
         const pending = tasks.filter(t => t.status === 'pending');
         const completed = tasks.filter(t => t.status === 'completed');
+        const completedToShow = completed.slice(0, 5);
+        const hiddenCompletedCount = Math.max(0, completed.length - completedToShow.length);
 
         let html = '';
 
@@ -141,7 +171,7 @@ async function loadTasks() {
         // Completed tasks
         if (completed.length > 0) {
             html += '<h4 style="color: var(--success); margin-top: 20px; margin-bottom: 10px;">Completed Tasks</h4>';
-            html += completed.map(task => `
+            html += completedToShow.map(task => `
                 <div class="task-item completed-task">
                     <div class="task-info">
                         <div class="task-title"><s>${task.title}</s></div>
@@ -151,6 +181,9 @@ async function loadTasks() {
                     </div>
                 </div>
             `).join('');
+            if (hiddenCompletedCount > 0) {
+                html += `<p class="subtle-note">Showing 5 of ${completed.length} completed tasks</p>`;
+            }
         }
 
         // Add task button
@@ -180,13 +213,18 @@ async function completeTask(taskId) {
             })
         });
 
-        if (!response.ok) throw new Error('Failed to complete task');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to complete task');
+        }
 
         const data = await response.json();
 
         // Show success message with points
         if (data.points_awarded > 0) {
             showNotification(`Task completed! +${data.points_awarded} points! 🎉`, 'success');
+        } else {
+            showNotification('Task completed successfully!', 'success');
         }
 
         // Reload data
@@ -194,7 +232,7 @@ async function completeTask(taskId) {
 
     } catch (error) {
         console.error('Error completing task:', error);
-        showNotification('Failed to complete task', 'error');
+        showNotification('Failed to complete task: ' + error.message, 'error');
     }
 }
 
@@ -299,67 +337,569 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+// Load flashcards
+async function loadFlashcards() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/flashcards?user_id=${USER_ID}`);
+        if (!response.ok) throw new Error('Failed to load flashcards');
+
+        const data = await response.json();
+        const flashcards = data.flashcards || [];
+        flashcardModules = data.modules || [];
+        const weeklyPoints = data.weekly_points || 0;
+
+        const flashcardsContent = document.getElementById('flashcardsContent');
+
+        const summaryHtml = `
+            <div class="flashcard-summary">
+                <div class="summary-card">
+                    <span>Weekly flashcard XP</span>
+                    <strong>${weeklyPoints}</strong>
+                </div>
+                <div class="summary-card">
+                    <span>Total cards saved</span>
+                    <strong>${flashcards.length}</strong>
+                </div>
+            </div>
+        `;
+
+        const modulesHtml = flashcardModules.length > 0 ?
+            `<div class="modules-grid">${flashcardModules.map(renderModuleCard).join('')}</div>` :
+            `
+                <p class="info-text">
+                    Forward a PDF or clear photo of your notes on WhatsApp and I’ll auto-build flashcards plus a quiz for you.
+                </p>
+            `;
+
+        const previewHtml = renderFlashcardPreview(flashcards);
+
+        flashcardsContent.innerHTML = summaryHtml + modulesHtml + previewHtml;
+
+    } catch (error) {
+        console.error('Error loading flashcards:', error);
+        document.getElementById('flashcardsContent').innerHTML =
+            '<p class="error-text">Error loading flashcards.</p>';
+    }
+}
+
+function renderModuleCard(module) {
+    const moduleName = module.module_name || 'General Study';
+    const topic = module.topic || moduleName;
+    let cards = module.available_flashcards;
+    if (cards === undefined || cards === null) {
+        cards = module.flashcards_generated;
+    }
+    if (cards === undefined || cards === null) {
+        cards = module.flashcard_count;
+    }
+    if (cards === undefined || cards === null) {
+        cards = 0;
+    }
+
+    let quizCount = module.quiz_generated;
+    if (quizCount === undefined || quizCount === null) {
+        quizCount = module.quiz_count;
+    }
+    if (quizCount === undefined || quizCount === null) {
+        quizCount = 0;
+    }
+    const created = module.created_at ? new Date(module.created_at).toLocaleDateString() : '';
+    const latestAttempt = module.latest_attempt;
+    const accuracy = latestAttempt && latestAttempt.total_questions ?
+        Math.round((latestAttempt.correct_count / latestAttempt.total_questions) * 100) :
+        null;
+    const attemptCopy = latestAttempt ?
+        `Last quiz: ${accuracy}%` :
+        'No quiz attempts this week';
+
+    const quizDisabled = cards <= 0;
+    const quizButtonClass = quizDisabled ? 'btn-disabled' : 'btn-primary';
+    const quizButtonAttrs = quizDisabled ?
+        'disabled aria-disabled="true"' :
+        `onclick="startModuleQuiz(${module.id})"`;
+
+    return `
+        <div class="module-card ${quizDisabled ? 'module-card--disabled' : ''}">
+            <div class="module-card__header">
+                <div>
+                    <p class="module-label">${escapeHtml(moduleName)}</p>
+                    <h4>${escapeHtml(topic)}</h4>
+                </div>
+                <span class="module-date">${created}</span>
+            </div>
+            <div class="module-metrics">
+                <span><i class="fas fa-layer-group"></i> ${cards} cards</span>
+                <span><i class="fas fa-question-circle"></i> ${quizCount} quiz</span>
+            </div>
+            <p class="module-attempt">${attemptCopy}</p>
+            <button class="${quizButtonClass} full-width" ${quizButtonAttrs}>
+                <i class="fas fa-play-circle"></i> ${quizDisabled ? 'Upload Notes First' : 'Study & Quiz'}
+            </button>
+        </div>
+    `;
+}
+
+function renderFlashcardPreview(flashcards) {
+    if (!flashcards || flashcards.length === 0) {
+        return '';
+    }
+
+    const previewCards = flashcards.slice(0, 4);
+    return `
+        <div class="flashcards-preview-title">
+            <h4>Recent flashcards</h4>
+            <p>Tap to flip between question and answer.</p>
+        </div>
+        <div class="flashcard-preview-grid">
+            ${previewCards.map((card, index) => `
+                <div class="flashcard-preview" onclick="toggleFlashcardAnswer(this)">
+                    <div class="flashcard-front">
+                        <div class="flashcard-number">#${index + 1}</div>
+                        <div class="flashcard-text">${escapeHtml(card.question)}</div>
+                        <div class="flashcard-hint">Tap to reveal answer</div>
+                    </div>
+                    <div class="flashcard-back">
+                        <div class="flashcard-text">${escapeHtml(card.answer)}</div>
+                        <div class="flashcard-hint">Tap to view question</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function toggleFlashcardAnswer(element) {
+    element.classList.toggle('flipped');
+}
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[char] || char);
+}
+
+async function startModuleQuiz(batchId) {
+    if (!batchId) {
+        showNotification('Module is missing an identifier.', 'error');
+        return;
+    }
+
+    activeQuiz = { batchId, questions: [], startedAt: Date.now(), durationMs: null };
+    showQuizModal('<p class="info-text">Loading quiz questions...</p>');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/quiz`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: USER_ID, batch_id: batchId })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load quiz');
+        }
+
+        if (!data.quiz || data.quiz.length === 0) {
+            showQuizModal('<p class="info-text">No quiz available for this module yet. Try generating new notes.</p>');
+            return;
+        }
+
+        activeQuiz.batchId = data.batch_id || batchId;
+        activeQuiz.questions = data.quiz;
+        renderQuizQuestionsModal();
+    } catch (error) {
+        console.error('Error loading quiz:', error);
+        showQuizModal(`<p class="error-text">${escapeHtml(error.message)}</p>`);
+    }
+}
+
+function renderQuizQuestionsModal() {
+    if (!activeQuiz || !activeQuiz.questions) {
+        showQuizModal('<p class="info-text">Quiz is not ready yet.</p>');
+        return;
+    }
+
+    try {
+        const questionsHtml = activeQuiz.questions.map((question, index) => {
+            const questionId = question.id || question.question_id;
+            if (!questionId) {
+                throw new Error('Quiz question missing identifier');
+            }
+            const options = question.options || [];
+            return `
+                <div class="quiz-question">
+                    <h4>Q${index + 1}. ${escapeHtml(question.question)}</h4>
+                    ${options.map((option, optionIndex) => `
+                        <label class="quiz-option">
+                            <input type="radio" name="question-${questionId}" value="${optionIndex}">
+                            <span>${escapeHtml(option)}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            `;
+        }).join('');
+
+        const formHtml = `
+            <form id="quizForm">
+                ${questionsHtml}
+                <div class="quiz-actions">
+                    <button type="button" class="btn-secondary" onclick="closeQuizModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Submit Quiz</button>
+                </div>
+                <p class="quiz-hint">Finish this quiz once a week to keep earning XP.</p>
+            </form>
+        `;
+
+        showQuizModal(formHtml);
+        const form = document.getElementById('quizForm');
+        if (form) {
+            form.addEventListener('submit', submitQuizAttempt);
+        }
+    } catch (error) {
+        console.error('Error rendering quiz modal:', error);
+        showQuizModal('<p class="error-text">Quiz data is incomplete. Please re-upload your notes.</p>');
+    }
+}
+
+function showQuizModal(contentHtml, title = 'Module Quiz') {
+    let modal = document.getElementById('quizModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'quizModal';
+        modal.className = 'quiz-modal';
+        modal.innerHTML = `
+            <div class="quiz-modal-overlay" onclick="closeQuizModal()"></div>
+            <div class="quiz-modal-content">
+                <div class="quiz-modal-header">
+                    <h3><i class="fas fa-question-circle"></i> <span class="quiz-modal-title"></span></h3>
+                    <button class="modal-close" aria-label="Close" onclick="closeQuizModal()">&times;</button>
+                </div>
+                <div class="quiz-modal-body"></div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    modal.querySelector('.quiz-modal-title').textContent = title;
+    modal.querySelector('.quiz-modal-body').innerHTML = contentHtml;
+    modal.classList.add('show');
+}
+
+async function submitQuizAttempt(event) {
+    event.preventDefault();
+    if (!activeQuiz || !activeQuiz.questions || activeQuiz.questions.length === 0) {
+        return;
+    }
+
+    const form = event.target;
+    let answers;
+    try {
+        answers = activeQuiz.questions.map((question, index) => {
+            const questionId = question.id || question.question_id;
+            if (!questionId) {
+                throw new Error('Quiz question missing identifier');
+            }
+            const selected = form.querySelector(`input[name="question-${questionId}"]:checked`);
+            return {
+                question_id: questionId,
+                selected_index: selected ? Number(selected.value) : null
+            };
+        });
+    } catch (error) {
+        console.error('Quiz submission aborted:', error);
+        showQuizModal('<p class="error-text">Quiz data is incomplete. Please try regenerating your notes.</p>');
+        return;
+    }
+
+    if (answers.some(answer => answer.selected_index === null)) {
+        showNotification('Answer every question before submitting.', 'warning');
+        return;
+    }
+
+    try {
+        const durationMs = activeQuiz.startedAt ? Date.now() - activeQuiz.startedAt : null;
+        if (durationMs !== null) {
+            activeQuiz.durationMs = durationMs;
+        }
+        const response = await fetch(`${API_BASE_URL}/api/quiz/attempt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: USER_ID,
+                batch_id: activeQuiz.batchId,
+                answers,
+                duration_ms: durationMs
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to submit quiz');
+        }
+
+        renderQuizResults(data);
+        await loadFlashcards();
+    } catch (error) {
+        console.error('Error submitting quiz:', error);
+        showNotification('Failed to submit quiz: ' + error.message, 'error');
+        showQuizModal(`<p class="error-text">${escapeHtml(error.message)}</p>`);
+    }
+}
+
+function renderQuizResults(result) {
+    const accuracyPercent = result.total ? Math.round((result.correct / result.total) * 100) : 0;
+    const weeklyCopy = result.weekly_limited
+        ? 'Weekly XP already claimed for this module'
+        : (result.points_awarded > 0
+            ? `+${result.points_awarded} XP added to your weekly total!`
+            : 'No XP awarded this round');
+    const elapsedMs = result.duration_seconds ? result.duration_seconds * 1000 : activeQuiz?.durationMs;
+    const elapsedSeconds = elapsedMs ? Math.round(elapsedMs / 1000) : null;
+    const elapsedCopy = elapsedSeconds !== null ? `${elapsedSeconds}s` : '—';
+
+    const resultsHtml = `
+        <div class="quiz-results">
+            <h4>Quiz Submitted</h4>
+            <div class="quiz-result-stats">
+                <span>Correct<strong>${result.correct}/${result.total}</strong></span>
+                <span>Accuracy<strong>${accuracyPercent}%</strong></span>
+            </div>
+            <p class="quiz-duration">Time taken: <strong>${elapsedCopy}</strong></p>
+            <p class="quiz-points">${weeklyCopy}</p>
+            <div class="quiz-actions">
+                <button class="btn-secondary" onclick="closeQuizModal()">Close</button>
+            </div>
+        </div>
+    `;
+
+    showQuizModal(resultsHtml, 'Great work!');
+}
+
+function closeQuizModal() {
+    const modal = document.getElementById('quizModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+    activeQuiz = null;
+}
+
 // Load schedule
 async function loadSchedule() {
+    const scheduleContent = document.getElementById('scheduleContent');
+
     try {
-        const response = await fetch(`${API_BASE_URL}/api/schedule?user_id=${USER_ID}`);
+        const response = await fetch(`${API_BASE_URL}/api/schedule/daily?user_id=${USER_ID}`);
         if (!response.ok) throw new Error('Failed to load schedule');
 
         const data = await response.json();
-        const schedule = data.schedule;
+        const {
+            classes_focus = null,
+                classes_today = [],
+                classes_next_day = [],
+                task_list = {},
+                exams_schedule = [],
+                study_sessions = [],
+                day_name,
+                date
+        } = data;
 
-        const scheduleContent = document.getElementById('scheduleContent');
+        const sections = [
+            renderClassesSection(classes_focus, classes_today, classes_next_day, day_name, date),
+            renderTaskListSection(task_list, study_sessions),
+            renderExamSection(exams_schedule)
+        ].filter(Boolean);
 
-        if (!schedule || !schedule.day_plan || schedule.day_plan.length === 0) {
+        if (sections.length === 0) {
             scheduleContent.innerHTML = `
                 <p class="info-text">
-                    No schedule yet. Generate one via WhatsApp:<br>
-                    <code>schedule</code>
+                    📅 No classes or major tasks tracked yet.<br>
+                    💬 Share your timetable or deadlines on WhatsApp to populate this space.
                 </p>
             `;
             return;
         }
 
-        // Show motivation message if available
-        let html = '';
-        if (schedule.motivation_message) {
-            html += `
-                <div style="background: var(--primary-dark); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <i class="fas fa-lightbulb" style="color: var(--warning); margin-right: 8px;"></i>
-                    ${schedule.motivation_message}
-                </div>
-            `;
-        }
+        scheduleContent.innerHTML = sections.join('');
 
-        // Show day plans
-        html += schedule.day_plan.map(day => `
-            <div class="schedule-day">
-                <div class="schedule-day-header">
-                    <div class="schedule-day-title">
-                        <i class="fas fa-calendar-day"></i> ${day.day || 'Unknown'} - ${day.date || ''}
-                    </div>
-                    <div class="schedule-day-hours">
-                        <i class="fas fa-clock"></i> ${day.total_study_hours || day.total_hours || 0}h
-                    </div>
-                </div>
-                <div class="schedule-sessions">
-                    ${day.sessions && day.sessions.length > 0 ? day.sessions.map(session => `
-                        <div class="schedule-session">
-                            <div class="session-time">${session.time || 'TBD'}</div>
-                            <div class="session-task">${session.task || 'Study session'}</div>
-                        </div>
-                    `).join('') : '<p class="info-text">No sessions scheduled</p>'}
-                </div>
-            </div>
-        `).join('');
-        
-        scheduleContent.innerHTML = html;
-        
     } catch (error) {
         console.error('Error loading schedule:', error);
-        document.getElementById('scheduleContent').innerHTML = 
-            '<p class="info-text">Error loading schedule. Request a new one via WhatsApp.</p>';
+        scheduleContent.innerHTML = '<p class="info-text">Error loading schedule. Please try refreshing.</p>';
     }
+}
+
+function renderClassesSection(focusData, classesToday = [], classesNextDay = [], fallbackDayName, fallbackDateStr) {
+    const focusItems = focusData?.items || [];
+    const hasAnyClasses = focusItems.length > 0 || classesToday.length > 0 || classesNextDay.length > 0;
+
+    if (!hasAnyClasses) {
+        return `
+            <div class="schedule-block">
+                <div class="schedule-block-header">
+                    <h3><i class="fas fa-chalkboard-teacher"></i> Classes</h3>
+                </div>
+                <p class="info-text">No timetable stored yet. Forward your class schedule via WhatsApp.</p>
+            </div>
+        `;
+    }
+
+    const blockDate = focusData?.date || fallbackDateStr;
+    const focusDayName = focusData?.day_name || fallbackDayName || 'Today';
+    const focusTag = focusData ? (focusData.is_today ? 'Today' : 'Up Next') : (fallbackDayName || 'Today');
+    const headerDate = blockDate ? formatDate(blockDate) : '';
+
+    let html = `
+        <div class="schedule-block">
+            <div class="schedule-block-header">
+                <h3><i class="fas fa-chalkboard-teacher"></i> Classes</h3>
+                <span class="schedule-block-date">${headerDate}</span>
+            </div>
+    `;
+
+    if (focusItems.length > 0) {
+        if (focusData && focusData.reason === 'next_day_preview') {
+            html += '<p class="subtle-note">All of today\'s classes are done. Here\'s the next timetable.</p>';
+        }
+
+        html += `<h4 class="schedule-subtitle">${focusTag} • ${focusDayName}</h4>`;
+        html += focusItems.map(renderClassCard).join('');
+    } else {
+        const todayLabel = fallbackDayName || 'Today';
+        if (classesToday.length > 0) {
+            html += `<h4 class="schedule-subtitle">${todayLabel}</h4>`;
+            html += classesToday.map(renderClassCard).join('');
+        }
+        if (classesNextDay.length > 0) {
+            html += `<h4 class="schedule-subtitle">Tomorrow</h4>`;
+            html += classesNextDay.map(renderClassCard).join('');
+        }
+    }
+
+    if (focusData?.is_today && classesNextDay.length > 0) {
+        html += '<h4 class="schedule-subtitle">Tomorrow</h4>';
+        html += classesNextDay.map(renderClassCard).join('');
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function renderClassCard(cls) {
+    return `
+        <div class="schedule-class">
+            <div class="class-time">${cls.start_time} - ${cls.end_time}</div>
+            <div class="class-details">
+                <div class="class-subject">${cls.subject}</div>
+                <div class="class-location"><i class="fas fa-map-marker-alt"></i> ${cls.location || 'TBD'}</div>
+                ${cls.instructor ? `<div class="class-instructor"><i class="fas fa-user"></i> ${cls.instructor}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderTaskListSection(taskList = {}, studySessions = []) {
+    const items = taskList.items || [];
+    const bufferCount = taskList.buffer_count || 0;
+    const focusLabel = taskList.focus_date ? formatDate(taskList.focus_date) : 'Next Day';
+
+    let html = `
+        <div class="schedule-block">
+            <div class="schedule-block-header">
+                <h3><i class="fas fa-list-check"></i> Task List</h3>
+                <span class="schedule-block-date">Focus: ${focusLabel}</span>
+            </div>
+    `;
+
+    if (items.length === 0) {
+        html += '<p class="info-text">No critical deadlines for tomorrow. Keep logging your assignments!</p>';
+    } else {
+        html += items.map(renderTaskPill).join('');
+    }
+
+    if (bufferCount > 0) {
+        html += `<p class="subtle-note">Stored ${bufferCount} additional tasks for upcoming days. They will show up closer to the due date.</p>`;
+    }
+
+    if (studySessions && studySessions.length > 0) {
+        const focusSession = studySessions[0];
+        html += `
+            <div class="ai-study-note">
+                <i class="fas fa-robot"></i>
+                AI Focus: ${focusSession.task} at ${focusSession.time} (${focusSession.priority} priority)
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function renderTaskPill(item) {
+    const categoryIcons = {
+        assignment: 'fa-book',
+        exam: 'fa-clipboard-check',
+        announcement: 'fa-bullhorn',
+        practice: 'fa-pen'
+    };
+    const icon = categoryIcons[item.category] || 'fa-check-circle';
+    const priorityClass = `priority-${item.importance || 'medium'}`;
+
+    return `
+        <div class="task-pill ${priorityClass}">
+            <div class="task-pill-header">
+                <span><i class="fas ${icon}"></i> ${item.title}</span>
+                ${item.due_time ? `<span class="task-pill-time">${item.due_time}</span>` : ''}
+            </div>
+            <div class="task-pill-meta">
+                ${item.due_date ? `<span><i class="fas fa-calendar"></i> ${formatDate(item.due_date)}</span>` : ''}
+                ${item.notes ? `<span><i class="fas fa-info-circle"></i> ${item.notes}</span>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderExamSection(exams = []) {
+    let html = `
+        <div class="schedule-block">
+            <div class="schedule-block-header">
+                <h3><i class="fas fa-clipboard-list"></i> Exams • Top Priority</h3>
+            </div>
+    `;
+
+    if (exams.length === 0) {
+        html += '<p class="info-text">No assessments recorded. Share exam notices via WhatsApp to track them here.</p>';
+    } else {
+        html += exams.slice(0, 5).map(renderExamCard).join('');
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function renderExamCard(exam) {
+    let countdown = '';
+    if (typeof exam.days_left === 'number') {
+        countdown = exam.days_left <= 0 ? 'Today' : `${exam.days_left}d left`;
+    }
+    const priorityLabel = exam.is_due_soon ? '<span class="exam-priority">High Priority</span>' : '';
+    return `
+        <div class="schedule-exam ${exam.is_due_soon ? 'urgent' : ''}">
+            <div class="exam-subject">${exam.subject || 'Exam'} ${exam.exam_type ? `(${exam.exam_type})` : ''}</div>
+            <div class="exam-info">
+                <span><i class="fas fa-calendar"></i> ${exam.exam_date ? formatDate(exam.exam_date) : 'TBD'}</span>
+                ${exam.start_time ? `<span><i class="fas fa-clock"></i> ${exam.start_time}</span>` : ''}
+                ${exam.location ? `<span><i class="fas fa-map-marker-alt"></i> ${exam.location}</span>` : ''}
+            </div>
+            <div class="exam-highlights">
+                ${priorityLabel}
+                ${countdown ? `<span class="exam-countdown">${countdown}</span>` : ''}
+            </div>
+        </div>
+    `;
 }
 
 // Load leaderboard
@@ -369,8 +909,8 @@ async function loadLeaderboard() {
         if (!response.ok) throw new Error('Failed to load leaderboard');
         
         const data = await response.json();
-        // Fix: leaderboard data is nested - get weekly_leaderboard array
-        const leaderboardData = data.leaderboard?.weekly_leaderboard || data.leaderboard || [];
+        const leaderboardPayload = data.leaderboard ? data.leaderboard : [];
+        const leaderboardData = normalizeLeaderboardEntries(leaderboardPayload);
         
         const leaderboardList = document.getElementById('leaderboardList');
         
@@ -379,9 +919,16 @@ async function loadLeaderboard() {
             return;
         }
         
-        // Update user's rank from API response
-        const userRank = data.leaderboard?.user_rank || 
-                        leaderboardData.findIndex(u => u.id === USER_ID || u.user_id === USER_ID) + 1;
+        let userRank = 0;
+        if (leaderboardPayload && typeof leaderboardPayload.user_rank === 'number' && leaderboardPayload.user_rank > 0) {
+            userRank = leaderboardPayload.user_rank;
+        } else {
+            const foundIndex = leaderboardData.findIndex(u => (u.id === USER_ID) || (u.user_id === USER_ID));
+            if (foundIndex !== -1) {
+                userRank = foundIndex + 1;
+            }
+        }
+
         if (userRank > 0) {
             document.getElementById('globalRank').textContent = `#${userRank}`;
         }
@@ -423,9 +970,12 @@ async function loadFriends() {
         if (!response.ok) throw new Error('Failed to load friends');
         
         const data = await response.json();
-        // Fix: get the actual leaderboard array from nested structure
-        const allUsers = data.leaderboard?.weekly_leaderboard || data.leaderboard || [];
-        friends = allUsers.filter(u => (u.id || u.user_id) !== USER_ID);
+        const leaderboardPayload = data.leaderboard ? data.leaderboard : [];
+        const allUsers = normalizeLeaderboardEntries(leaderboardPayload);
+        friends = allUsers.filter(user => {
+            const userId = user.id || user.user_id;
+            return userId !== USER_ID;
+        });
         
         const friendSelect = document.getElementById('friendSelect');
         if (friends.length === 0) {
@@ -458,22 +1008,26 @@ async function compareFriend() {
         const response = await fetch(
             `${API_BASE_URL}/api/friends/compare?user1_id=${USER_ID}&user2_id=${friendId}`
         );
-        if (!response.ok) throw new Error('Failed to compare');
-        
         const data = await response.json();
-        const comparison = data.comparison;
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to compare');
+        }
+
+        const comparison = data.comparison || {};
+        const userStats = comparison.user1 || comparison.user || {};
+        const friendStats = comparison.user2 || comparison.friend || {};
         
         const html = `
             <div class="comparison-stats">
                 <div class="comparison-item">
                     <div class="comparison-label">Score</div>
                     <div class="comparison-values">
-                        <span class="comparison-you ${comparison.user1.score > comparison.user2.score ? 'comparison-winner' : ''}">
-                            ${comparison.user1.score}
+                        <span class="comparison-you ${userStats.score > friendStats.score ? 'comparison-winner' : ''}">
+                            ${userStats.score ?? 0}
                         </span>
                         <span class="comparison-vs">vs</span>
-                        <span class="comparison-friend ${comparison.user2.score > comparison.user1.score ? 'comparison-winner' : ''}">
-                            ${comparison.user2.score}
+                        <span class="comparison-friend ${friendStats.score > userStats.score ? 'comparison-winner' : ''}">
+                            ${friendStats.score ?? 0}
                         </span>
                     </div>
                 </div>
@@ -481,12 +1035,12 @@ async function compareFriend() {
                 <div class="comparison-item">
                     <div class="comparison-label">Streak</div>
                     <div class="comparison-values">
-                        <span class="comparison-you ${comparison.user1.streak > comparison.user2.streak ? 'comparison-winner' : ''}">
-                            ${comparison.user1.streak}
+                        <span class="comparison-you ${userStats.streak > friendStats.streak ? 'comparison-winner' : ''}">
+                            ${userStats.streak ?? 0}
                         </span>
                         <span class="comparison-vs">vs</span>
-                        <span class="comparison-friend ${comparison.user2.streak > comparison.user1.streak ? 'comparison-winner' : ''}">
-                            ${comparison.user2.streak}
+                        <span class="comparison-friend ${friendStats.streak > userStats.streak ? 'comparison-winner' : ''}">
+                            ${friendStats.streak ?? 0}
                         </span>
                     </div>
                 </div>
@@ -494,12 +1048,12 @@ async function compareFriend() {
                 <div class="comparison-item">
                     <div class="comparison-label">Tasks Completed</div>
                     <div class="comparison-values">
-                        <span class="comparison-you ${comparison.user1.tasks_completed > comparison.user2.tasks_completed ? 'comparison-winner' : ''}">
-                            ${comparison.user1.tasks_completed}
+                        <span class="comparison-you ${userStats.tasks_completed > friendStats.tasks_completed ? 'comparison-winner' : ''}">
+                            ${userStats.tasks_completed ?? 0}
                         </span>
                         <span class="comparison-vs">vs</span>
-                        <span class="comparison-friend ${comparison.user2.tasks_completed > comparison.user2.tasks_completed ? 'comparison-winner' : ''}">
-                            ${comparison.user2.tasks_completed}
+                        <span class="comparison-friend ${friendStats.tasks_completed > userStats.tasks_completed ? 'comparison-winner' : ''}">
+                            ${friendStats.tasks_completed ?? 0}
                         </span>
                     </div>
                 </div>
@@ -507,12 +1061,12 @@ async function compareFriend() {
                 <div class="comparison-item">
                     <div class="comparison-label">Study Hours</div>
                     <div class="comparison-values">
-                        <span class="comparison-you ${comparison.user1.study_hours > comparison.user2.study_hours ? 'comparison-winner' : ''}">
-                            ${comparison.user1.study_hours.toFixed(1)}h
+                        <span class="comparison-you ${userStats.study_hours > friendStats.study_hours ? 'comparison-winner' : ''}">
+                            ${(userStats.study_hours || 0).toFixed(1)}h
                         </span>
                         <span class="comparison-vs">vs</span>
-                        <span class="comparison-friend ${comparison.user2.study_hours > comparison.user1.study_hours ? 'comparison-winner' : ''}">
-                            ${comparison.user2.study_hours.toFixed(1)}h
+                        <span class="comparison-friend ${friendStats.study_hours > userStats.study_hours ? 'comparison-winner' : ''}">
+                            ${(friendStats.study_hours || 0).toFixed(1)}h
                         </span>
                     </div>
                 </div>
@@ -524,7 +1078,7 @@ async function compareFriend() {
     } catch (error) {
         console.error('Error comparing friend:', error);
         document.getElementById('friendComparison').innerHTML = 
-            '<p class="info-text">Error loading comparison.</p>';
+            `<p class="info-text">${escapeHtml(error.message || 'Error loading comparison.')}</p>`;
     }
 }
 

@@ -4,6 +4,121 @@
 
 ---
 
+## 🆕 What's New - Version 2.2 (November 17, 2025)
+
+### 🔥 LATEST FIXES - AI Task Assignment & Image Upload Restored!
+
+#### ✅ **Image-Based Timetable & Announcement Parsing** 📸
+- ✅ **Send images of timetables** → Automatically parse classes, exams, schedules
+- ✅ **Send screenshots of announcements** → Auto-create tasks with deadlines
+- ✅ **Smart routing:** Images work WITH or WITHOUT study sessions
+- ✅ **Gemini Vision OCR** extracts text from images/PDFs
+- ✅ **AI parsing** understands context and creates appropriate data
+
+#### How It Works:
+```
+Scenario 1: Image of Class Schedule
+→ Send image of timetable
+→ Bot extracts text using Gemini Vision
+→ Detects weekdays and class schedule keywords
+→ Parses classes, exams, announcements
+→ Saves to database
+→ "✅ Timetable Parsed! 15 classes, 3 exams added"
+
+Scenario 2: Screenshot of Assignment
+→ Send WhatsApp screenshot: "Math assignment due tomorrow 3 PM"
+→ Bot extracts text
+→ Detects assignment keywords
+→ Creates task with deadline
+→ Generates new schedule
+→ "✅ Added 1 task, updated your schedule"
+
+Scenario 3: Notes for Flashcards (study session active)
+→ Send "start study Biology"
+→ Send image of biology notes
+→ Bot generates flashcards (not timetable)
+→ "✅ 10 flashcards created"
+```
+
+**See `AI_TASK_FIX.md` for complete details!**
+
+---
+
+### Previous Updates (Version 2.1)
+
+#### 🎉 **Full WhatsApp Media Support** 📎
+- ✅ **Send images** of notes via WhatsApp → Auto-generate flashcards
+- ✅ **Send PDFs** of study material → Extract text & create flashcards
+- ✅ **Gemini Vision API** for OCR and text extraction
+- ✅ **Automatic file downloads** from Twilio with authentication
+- ✅ **Multiple format support**: JPG, PNG, PDF, HEIC, WebP, GIF
+- ✅ **Smart cleanup** - Auto-delete old files after 7 days
+
+#### How It Works:
+```
+1. Start study session: "start study Biology"
+2. Send image/PDF of your notes
+3. Bot processes and generates flashcards automatically
+4. End session: "end study"
+5. Take quiz: "quiz me"
+```
+
+**See `MEDIA_HANDLING.md` for complete documentation!**
+
+---
+
+### Previous Updates (Version 2.0)
+
+#### 1. **Flashcard System with Gemini Vision** 🎴
+- ✅ Generate flashcards from text notes
+- ✅ Image OCR support for handwritten/typed notes
+- ✅ AI-powered intelligent Q&A generation
+- ✅ Automated quiz creation
+- ✅ Study session tracking
+
+#### 2. **Enhanced Task Management** ✔️
+- ✅ Fixed task completion button
+- ✅ Better error handling and notifications
+- ✅ Points system on completion
+- ✅ Tasks as primary to-do list
+
+#### 3. **Improved Schedule Display** 📅
+- ✅ Now shows daily classes properly
+- ✅ Displays upcoming exams with countdown
+- ✅ Free time blocks calculation
+- ✅ Better empty state handling
+
+#### 4. **WhatsApp Bot Enhancements** 💬
+- ✅ `start study [topic]` - Begin study session
+- ✅ `end study` - End session & get quiz
+- ✅ `quiz me` - Get flashcard questions
+- ✅ **NEW:** Send images/PDFs for flashcard generation
+
+### 📁 Key Files
+- `backend/whatsapp/media_handler.py` - Media download handler
+- `backend/ai_logic/flashcard_generator.py` - Gemini Vision flashcard generator
+- `MEDIA_HANDLING.md` - Complete media handling guide
+- `IMPLEMENTATION_SUMMARY.md` - Complete changelog
+- `QUICK_START.md` - Quick testing guide
+- `FLASHCARD_EXAMPLES.md` - Example outputs
+
+### 📊 Database Enhancements
+- Added `study_sessions` table
+- Added `flashcard_reviews` table  
+- Added `study_topics` table
+- 10+ new database methods
+
+### 🔗 API Endpoints
+- `POST /api/flashcards` - Generate flashcards
+- `POST /api/study-session` - Start study session
+- `PUT /api/study-session` - End study session
+- `POST /api/quiz` - Generate quiz
+- `POST /webhook/whatsapp` - **Now handles media files!**
+
+**See `IMPLEMENTATION_SUMMARY.md` for complete details!**
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Install Dependencies
@@ -17,7 +132,7 @@ Copy `.env.example` to `.env` and add your API keys:
 GEMINI_API_KEY=your_gemini_api_key_here
 TWILIO_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+TWILIO_WHATSAPP_NUMBER=whatsapp:+1415523****
 ```
 
 ### 3. Start Backend Server

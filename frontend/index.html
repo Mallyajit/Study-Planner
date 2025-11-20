@@ -67,7 +67,7 @@
                     <!-- Tasks Section -->
                     <section class="card tasks-section">
                         <div class="card-header">
-                            <h2><i class="fas fa-tasks"></i> My Tasks</h2>
+                            <h2><i class="fas fa-tasks"></i> Todo List</h2>
                             <button class="btn-refresh" onclick="loadTasks()">
                                 <i class="fas fa-sync-alt"></i>
                             </button>
@@ -75,6 +75,21 @@
                         <div class="card-body">
                             <div id="tasksList" class="tasks-list">
                                 <p class="loading">Loading tasks...</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Flashcards Section -->
+                    <section class="card flashcards-section">
+                        <div class="card-header">
+                            <h2><i class="fas fa-layer-group"></i> Flashcards & Quiz</h2>
+                            <button class="btn-refresh" onclick="loadFlashcards()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="flashcardsContent" class="flashcards-content">
+                                <p class="loading">Loading flashcards...</p>
                             </div>
                         </div>
                     </section>
@@ -140,12 +155,14 @@
                                 <ul>
                                     <li><code>add task: [title] by [date]</code></li>
                                     <li><code>schedule</code> - Get AI schedule</li>
+                                    <li><code>start study [topic]</code> - Begin study session</li>
+                                    <li><code>end study</code> - End session & get quiz</li>
+                                    <li><code>quiz me</code> - Get flashcards quiz</li>
                                     <li><code>progress</code> - View your stats</li>
-                                    <li><code>leaderboard</code> - See rankings</li>
                                     <li><code>help</code> - View all commands</li>
                                 </ul>
                                 <p class="info-text" style="margin-top: 15px;">
-                                    <strong>Your Number:</strong> +917384406508
+                                    <strong>Note:</strong> Send images of notes to generate flashcards!
                                 </p>
                             </div>
                         </div>

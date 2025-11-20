@@ -68,7 +68,6 @@ class Database:
         """Initialize all database tables"""
         
         schema_queries = [
-            # Users table
             """
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -79,20 +78,18 @@ class Database:
                 score INT DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_phone (phone),
-                INDEX idx_score (score)
+                INDEX idx_phone (phone)
             )
             """,
-            
-            # Tasks table
             """
             CREATE TABLE IF NOT EXISTS tasks (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
                 title VARCHAR(255) NOT NULL,
+                description TEXT,
                 deadline DATETIME,
-                status ENUM('pending', 'in_progress', 'completed', 'overdue') DEFAULT 'pending',
-                importance ENUM('low', 'medium', 'high', 'urgent') DEFAULT 'medium',
+                importance ENUM('low','medium','high') DEFAULT 'medium',
+                status ENUM('pending','completed') DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 completed_at TIMESTAMP NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -100,8 +97,6 @@ class Database:
                 INDEX idx_deadline (deadline)
             )
             """,
-            
-            # Study sessions table
             """
             CREATE TABLE IF NOT EXISTS sessions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -115,28 +110,28 @@ class Database:
                 INDEX idx_user_date (user_id, date)
             )
             """,
-            
-            # Friends/Social table
             """
             CREATE TABLE IF NOT EXISTS friends (
                 user_id INT NOT NULL,
                 friend_id INT NOT NULL,
-                status ENUM('pending', 'accepted', 'blocked') DEFAULT 'accepted',
+                status ENUM('pending','accepted','blocked') DEFAULT 'accepted',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, friend_id),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (friend_id) REFERENCES users(id) ON DELETE CASCADE,
-                CHECK (user_id != friend_id)
+                CONSTRAINT chk_friend_pair CHECK (user_id <> friend_id)
             )
             """,
-            
-            # Flashcards table
             """
             CREATE TABLE IF NOT EXISTS flashcards (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
                 question TEXT NOT NULL,
                 answer TEXT NOT NULL,
+                topic VARCHAR(255),
+                module_name VARCHAR(255),
+                note_id INT,
+                batch_id INT,
                 progress_level INT DEFAULT 0,
                 last_reviewed TIMESTAMP NULL,
                 review_count INT DEFAULT 0,
@@ -145,17 +140,46 @@ class Database:
                 INDEX idx_user_progress (user_id, progress_level)
             )
             """,
-            
-            # Notes table
             """
             CREATE TABLE IF NOT EXISTS notes (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
-                filepath VARCHAR(500) NOT NULL,
-                tags TEXT,
+                title VARCHAR(255) NOT NULL,
+                file_path VARCHAR(500) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                INDEX idx_user (user_id)
+                INDEX idx_user_notes (user_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS class_schedules (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                day_of_week VARCHAR(20) NOT NULL,
+                subject VARCHAR(255) NOT NULL,
+                start_time VARCHAR(20) NOT NULL,
+                end_time VARCHAR(20) NOT NULL,
+                location VARCHAR(255),
+                instructor VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_schedule_user_day (user_id, day_of_week)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS quiz_attempts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                batch_id INT NOT NULL,
+                correct_count INT,
+                total_questions INT,
+                awarded_points INT,
+                submitted_answers JSON,
+                duration_ms INT,
+                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_quiz_user (user_id),
+                INDEX idx_quiz_batch (batch_id)
             )
             """
         ]
@@ -417,6 +441,63 @@ class Database:
         except Error as e:
             print(f"Error fetching notes: {e}")
             return []
+
+    def delete_class_schedules_for_days(self, user_id, day_names):
+        """Remove class schedule rows for the specified days."""
+        if not day_names:
+            return 0
+
+        normalized = [name.strip().title() for name in day_names if name]
+        if not normalized:
+            return 0
+
+        placeholders = ",".join(["%s"] * len(normalized))
+        query = f"DELETE FROM class_schedules WHERE user_id = %s AND day_of_week IN ({placeholders})"
+        params = [user_id] + normalized
+
+        try:
+            self.cursor.execute(query, params)
+            affected = self.cursor.rowcount
+            self.connection.commit()
+            return affected
+        except Error as e:
+            print(f"Error clearing class schedules: {e}")
+            self.connection.rollback()
+            return 0
+
+    def record_quiz_attempt(self, user_id, batch_id, correct_count, total_questions, awarded_points, submitted_answers, duration_ms=None):
+        """Store quiz attempt rows for MySQL"""
+        try:
+            answers_json = json.dumps(submitted_answers)
+            query = """
+                INSERT INTO quiz_attempts (user_id, batch_id, correct_count, total_questions, awarded_points, submitted_answers, duration_ms)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            self.cursor.execute(query, (user_id, batch_id, correct_count, total_questions, awarded_points, answers_json, duration_ms))
+            self.connection.commit()
+            return self.cursor.lastrowid
+        except Error as e:
+            print(f"Error recording quiz attempt: {e}")
+            self.connection.rollback()
+            return None
+
+    def get_latest_quiz_attempt(self, batch_id, user_id=None):
+        """Fetch latest quiz attempt metadata"""
+        try:
+            if user_id:
+                query = """
+                    SELECT * FROM quiz_attempts
+                    WHERE batch_id = %s AND user_id = %s
+                    ORDER BY completed_at DESC LIMIT 1
+                """
+                self.cursor.execute(query, (batch_id, user_id))
+            else:
+                query = "SELECT * FROM quiz_attempts WHERE batch_id = %s ORDER BY completed_at DESC LIMIT 1"
+                self.cursor.execute(query, (batch_id,))
+            return self.cursor.fetchone()
+        except Error as e:
+            print(f"Error fetching quiz attempt: {e}")
+            return None
 
 
 # Singleton instance

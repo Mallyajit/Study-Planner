@@ -135,22 +135,35 @@ class SocialManager:
         friend_sessions = self.db.get_user_sessions(friend_id, days=30)
         
         # Calculate stats
+        def _safe_hours(sessions):
+            total = 0.0
+            for sess in sessions:
+                value = sess.get('hours_studied') or sess.get('duration_hours') or 0
+                try:
+                    total += float(value)
+                except (TypeError, ValueError):
+                    continue
+            return total
+
+        user_hours = _safe_hours(user_sessions)
+        friend_hours = _safe_hours(friend_sessions)
+
         user_stats = {
+            "id": user['id'],
             "name": user['name'],
             "score": user['score'],
             "streak": user['streak'],
-            "tasks_completed": len([t for t in user_tasks if t['status'] == 'completed']),
-            "total_hours": sum(s['hours_studied'] for s in user_sessions),
-            "avg_daily_hours": sum(s['hours_studied'] for s in user_sessions) / max(len(user_sessions), 1)
+            "tasks_completed": len([t for t in user_tasks if t.get('status') == 'completed']),
+            "study_hours": round(user_hours, 2)
         }
-        
+
         friend_stats = {
+            "id": friend['id'],
             "name": friend['name'],
             "score": friend['score'],
             "streak": friend['streak'],
-            "tasks_completed": len([t for t in friend_tasks if t['status'] == 'completed']),
-            "total_hours": sum(s['hours_studied'] for s in friend_sessions),
-            "avg_daily_hours": sum(s['hours_studied'] for s in friend_sessions) / max(len(friend_sessions), 1)
+            "tasks_completed": len([t for t in friend_tasks if t.get('status') == 'completed']),
+            "study_hours": round(friend_hours, 2)
         }
         
         # Calculate differences
@@ -161,9 +174,9 @@ class SocialManager:
                 "score_diff": user_stats['score'] - friend_stats['score'],
                 "streak_diff": user_stats['streak'] - friend_stats['streak'],
                 "tasks_diff": user_stats['tasks_completed'] - friend_stats['tasks_completed'],
-                "hours_diff": round(user_stats['total_hours'] - friend_stats['total_hours'], 2)
+                "hours_diff": round(user_hours - friend_hours, 2)
             },
-            "winner": user['name'] if user_stats['score'] > friend_stats['score'] else friend['name']
+            "winner": user_stats['name'] if user_stats['score'] >= friend_stats['score'] else friend_stats['name']
         }
         
         return comparison
